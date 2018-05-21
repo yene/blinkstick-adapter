@@ -1,0 +1,39 @@
+{
+  "name": "blinkstick-adapter",
+  "version": "0.0.1",
+  "description": "Blinkstick adapter add-on for Mozilla IoT Gateway",
+  "author": "Yannick Weiss",
+  "main": "index.js",
+  "keywords": [
+    "mozilla",
+    "iot",
+    "adapter",
+    "blinkstick"
+  ],
+  "homepage": "https://github.com/mozilla-iot/example-adapter",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mozilla-iot/example-adapter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mozilla-iot/example-adapter/issues"
+  },
+  "files": [
+    "LICENSE",
+    "SHA256SUMS",
+    "blinkstick-adapter.js",
+    "index.js"
+  ],
+  "moziot": {
+    "api": {
+      "min": 1,
+      "max": 2
+    },
+    "plugin": true,
+    "exec": "{nodeLoader} {path}"
+  },
+  "dependencies": {
+    "blinkstick": "^1.1.3"
+  }
+}
