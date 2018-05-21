@@ -1,6 +1,7 @@
 # Blinkstick Adapter
 To learn something you have to touch it, to grab it, to break it.
 
+![Blinkstick](blinkstick.gif)
 
 ## Notes and TODO
 * Gateway setup for mac os is well documented in their repo.
