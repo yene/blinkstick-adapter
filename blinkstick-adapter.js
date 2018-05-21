@@ -1,5 +1,5 @@
 /**
- * example-adapter.js - Example adapter.
+ * blinkstick-adapter.js - Blinkstick adapter.
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,6 +9,8 @@
 'use strict';
 
 let Adapter, Device, Property;
+let blinkstick = require('blinkstick');
+
 try {
   Adapter = require('../adapter');
   Device = require('../device');
@@ -24,11 +26,9 @@ try {
   Property = gwa.Property;
 }
 
-class ExampleProperty extends Property {
+class BlinkstickProperty extends Property {
   constructor(device, name, propertyDescription) {
     super(device, name, propertyDescription);
-    this.unit = propertyDescription.unit;
-    this.description = propertyDescription.description;
     this.setCachedValue(propertyDescription.value);
     this.device.notifyPropertyChanged(this);
   }
@@ -45,8 +45,24 @@ class ExampleProperty extends Property {
   setValue(value) {
     return new Promise((resolve, reject) => {
       super.setValue(value).then((updatedValue) => {
-        resolve(updatedValue);
-        this.device.notifyPropertyChanged(this);
+        // Note: no idea how errors are propagated
+        blinkstick.findBySerial(this.device.serial, (d) => {
+          if (this.name === 'on') {
+            if (this.value) {
+              d.setColor(this.device.color);
+            } else {
+              d.turnOff();
+            }
+            resolve(updatedValue);
+            this.device.notifyPropertyChanged(this);
+          }
+          if (this.name === 'color') {
+            d.setColor(this.value);
+            this.device.color = this.value;
+            resolve(updatedValue);
+            this.device.notifyPropertyChanged(this);
+          }
+        });
       }).catch((err) => {
         reject(err);
       });
@@ -54,24 +70,25 @@ class ExampleProperty extends Property {
   }
 }
 
-class ExampleDevice extends Device {
-  constructor(adapter, id, deviceDescription) {
+class BlinkstickDevice extends Device {
+  constructor(adapter, id, serial, color, deviceDescription) {
     super(adapter, id);
+    this.serial = serial;
+    this.color = color;
     this.name = deviceDescription.name;
     this.type = deviceDescription.type;
     this.description = deviceDescription.description;
     for (const propertyName in deviceDescription.properties) {
       const propertyDescription = deviceDescription.properties[propertyName];
-      const property = new ExampleProperty(this, propertyName,
-                                           propertyDescription);
+      const property = new BlinkstickProperty(this, propertyName, propertyDescription);
       this.properties.set(propertyName, property);
     }
   }
 }
 
-class ExampleAdapter extends Adapter {
+class BlinkstickAdapter extends Adapter {
   constructor(addonManager, packageName) {
-    super(addonManager, 'ExampleAdapter', packageName);
+    super(addonManager, 'BlinkstickAdapter', packageName);
     addonManager.addAdapter(this);
   }
 
@@ -89,7 +106,7 @@ class ExampleAdapter extends Adapter {
       if (deviceId in this.devices) {
         reject('Device: ' + deviceId + ' already exists.');
       } else {
-        const device = new ExampleDevice(this, deviceId, deviceDescription);
+        const device = new BlinkstickDevice(this, deviceId, 'serial', 'color', deviceDescription);
         this.handleDeviceAdded(device);
         resolve(device);
       }
@@ -122,16 +139,14 @@ class ExampleAdapter extends Adapter {
    * @param {Number} timeoutSeconds Number of seconds to run before timeout
    */
   startPairing(_timeoutSeconds) {
-    console.log('ExampleAdapter:', this.name,
-                'id', this.id, 'pairing started');
+    console.log('BlinkstickAdapter:', this.name, 'id', this.id, 'pairing started');
   }
 
   /**
    * Cancel the pairing/discovery process.
    */
   cancelPairing() {
-    console.log('ExampleAdapter:', this.name, 'id', this.id,
-                'pairing cancelled');
+    console.log('BlinkstickAdapter:', this.name, 'id', this.id, 'pairing cancelled');
   }
 
   /**
@@ -140,13 +155,11 @@ class ExampleAdapter extends Adapter {
    * @param {Object} device Device to unpair with
    */
   removeThing(device) {
-    console.log('ExampleAdapter:', this.name, 'id', this.id,
-                'removeThing(', device.id, ') started');
-
+    console.log('BlinkstickAdapter:', this.name, 'id', this.id, 'removeThing(', device.id, ') started');
     this.removeDevice(device.id).then(() => {
-      console.log('ExampleAdapter: device:', device.id, 'was unpaired.');
+      console.log('BlinkstickAdapter: device:', device.id, 'was unpaired.');
     }).catch((err) => {
-      console.error('ExampleAdapter: unpairing', device.id, 'failed');
+      console.error('BlinkstickAdapter: unpairing', device.id, 'failed');
       console.error(err);
     });
   }
@@ -157,26 +170,48 @@ class ExampleAdapter extends Adapter {
    * @param {Object} device Device that is currently being paired
    */
   cancelRemoveThing(device) {
-    console.log('ExampleAdapter:', this.name, 'id', this.id,
-                'cancelRemoveThing(', device.id, ')');
+    console.log('BlinkstickAdapter:', this.name, 'id', this.id, 'cancelRemoveThing(', device.id, ')');
   }
 }
 
-function loadExampleAdapter(addonManager, manifest, _errorCallback) {
-  const adapter = new ExampleAdapter(addonManager, manifest.name);
-  const device = new ExampleDevice(adapter, 'example-plug-2', {
-    name: 'blinkstick-plug-2',
-    type: 'onOffSwitch',
-    description: 'Blinkstick Square Device',
-    properties: {
-      on: {
-        name: 'on',
-        type: 'boolean',
-        value: false,
-      },
-    },
+function loadBlinkstickAdapter(addonManager, manifest, _errorCallback) {
+  const adapter = new BlinkstickAdapter(addonManager, manifest.name);
+  var d = blinkstick.findFirst();
+  if (d === undefined) {
+    return;
+  }
+
+  d.getSerial(function(error, serial) {
+    if (error) {
+      console.log('Unexpected error', error);
+      return;
+    }
+    d.getColorString(0, function(error, color) {
+      if (error) {
+        console.log('Unexpected error', error);
+        return;
+      }
+
+      const device = new BlinkstickDevice(adapter, 'blinkstick', serial, color, {
+        name: 'Blinkstick',
+        type: 'onOffColorLight',
+        description: 'Blinkstick USB Device #' + serial,
+        properties: {
+          on: {
+            name: 'on',
+            type: 'boolean',
+            value: color !== '#000000',
+          },
+          color: {
+            name: 'color',
+            type: 'string',
+            value: color,
+          },
+        },
+      });
+      adapter.handleDeviceAdded(device);
+    });
   });
-  adapter.handleDeviceAdded(device);
 }
 
-module.exports = loadExampleAdapter;
+module.exports = loadBlinkstickAdapter;
